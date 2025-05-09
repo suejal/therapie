@@ -289,7 +289,6 @@ const Journal = () => {
                 textAlign: 'center', 
                 padding: '60px 0',  
                 background: 'white',
-                borderRadius: '10px',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
               }}
             >
@@ -459,4 +458,4 @@ const Journal = () => {
   );
 };
 
-export default Journal;
+export default Journal; 

@@ -13,8 +13,10 @@ const JournalEntry = () => {
     content: '',
     mood: ''
   });
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState(null);
 
   useEffect(() => {
     if (id) {
@@ -29,50 +31,91 @@ const JournalEntry = () => {
           });
           setLoading(false);
         } catch (err) {
-          setError('Failed to fetch journal');
+          setError('Failed to fetch journal entry');
           setLoading(false);
         }
       };
-
+      
       fetchJournal();
     }
   }, [id]);
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    
-    if (!formData.content || formData.content.trim() === '') {
-      setError('Journal content is required');
-      return;
-    }
     
     try {
       setLoading(true);
-      console.log('Submitting entry:', formData);
-      
       if (id) {
-        const response = await api.put(`/api/journal/${id}`, formData);
-        console.log('Update response:', response.data);
-        
+        await api.put(`/api/journal/${id}`, formData);
       } else {
-        const response = await api.post('/api/journal/add', formData);
-        console.log('Create response:', response.data);
+        await api.post('/api/journal', formData);
       }
-      
       setLoading(false);
-      navigate('/journal', { state: { refreshEntries: true } });
+      navigate('/journal');
     } catch (err) {
-      console.error('Error saving entry:', err);
-      setError(err.response?.data?.error || 'Failed to save journal');
+      setError('Failed to save journal entry');
       setLoading(false);
     }
   };
-  
+
+  const analyzeJournalMood = async () => {
+    if (!id) {
+      try {
+        setLoading(true);
+        const res = await api.post('/api/journal', formData);
+        setLoading(false);
+        
+        if (!res.data || !res.data._id) {
+          console.error('Invalid response from save:', res);
+          setError('Failed to save journal entry: No ID returned');
+          return;
+        }
+        
+        const newId = res.data._id;
+        console.log('Journal saved with ID:', newId);
+      
+        setAnalyzing(true);
+        try {
+          const analysisRes = await api.get(`/api/journal/analyze/${newId}`);
+          console.log('Analysis response:', analysisRes);
+          setAnalysis(analysisRes.data.analysis);
+          setAnalyzing(false);
+          
+          navigate(`/entry/${newId}`);
+        } catch (analysisErr) {
+          console.error('Analysis error:', analysisErr);
+          setError(`Failed to analyze: ${analysisErr.response?.data?.error || analysisErr.message}`);
+          setAnalyzing(false);
+        }
+      } catch (err) {
+        console.error('Save error:', err);
+        setError(`Failed to save: ${err.response?.data?.error || err.message}`);
+        setLoading(false);
+        setAnalyzing(false);
+      }
+    } else {
+      try {
+        setAnalyzing(true);
+        console.log('Analyzing existing entry with ID:', id);
+        const res = await api.get(`/api/journal/analyze/${id}`);
+        console.log('Analysis response:', res);
+        setAnalysis(res.data.analysis);
+        setAnalyzing(false);
+      } catch (err) {
+        console.error('Analysis error for existing entry:', err);
+        setError(`Failed to analyze: ${err.response?.data?.error || err.message}`);
+        setAnalyzing(false);
+      }
+    }
+  };
+
   return (
     <motion.div 
       className="entry-container"
@@ -105,44 +148,62 @@ const JournalEntry = () => {
               rows="8"
             />
           </div>
-          <div className="form-group mood-selector">
-            <label>How's your mood?</label>
-            <div className="mood-options">
-              {moodOptions.map(mood => (
-                <motion.button
-                  key={mood}
-                  type="button"
-                  className={`mood-button ${formData.mood === mood ? 'selected' : ''}`}
-                  onClick={() => setFormData({ ...formData, mood })}
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                >
-                  {mood}
-                </motion.button>
-              ))}
-            </div>
-          </div>
+          
           <div className="form-actions">
-            <motion.button 
-              type="button" 
+            <motion.button
+              type="button"
               className="btn-secondary"
               onClick={() => navigate('/journal')}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
+              disabled={loading}
             >
               Cancel
             </motion.button>
-            <motion.button 
-              type="submit" 
+            <motion.button
+              type="submit"
               className="btn-primary"
-              disabled={loading}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
+              disabled={loading}
             >
-              {loading ? 'Saving...' : id ? 'Update' : 'Save'}
+              {loading ? 'Saving...' : 'Save Entry'}
+            </motion.button>
+            <motion.button
+              type="button"
+              className="btn-analyze"
+              onClick={analyzeJournalMood}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              disabled={analyzing || !formData.content}
+            >
+              {analyzing ? 'Analyzing...' : 'AI Analysis'}
             </motion.button>
           </div>
         </form>
+        
+        {analysis && (
+          <motion.div 
+            className="analysis-container"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <h3>AI Analysis</h3>
+            <div className="analysis-content">
+              {analysis.split('\n').map((paragraph, index) => (
+                <p key={index}>{paragraph}</p>
+              ))}
+            </div>
+          </motion.div>
+        )}
+        
+        {analyzing && (
+          <div className="loading-container">
+            <div className="loading-spinner"></div>
+            <p>Analyzing your journal entry...</p>
+          </div>
+        )}
       </div>
     </motion.div>
   );

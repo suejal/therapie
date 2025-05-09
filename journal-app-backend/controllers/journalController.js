@@ -1,4 +1,9 @@
 const Journal = require('../models/journalModel');
+const { Groq } = require('groq-sdk');
+
+const groq = new Groq({
+  apiKey: "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",
+});
 
 exports.createJournal = async (req, res) => {
   try {
@@ -137,5 +142,112 @@ exports.getWeeklyInsights = async (req, res) => {
   }
 };
 
+exports.analyzeJournalMood = async (req, res) => {
+  try {
+    const { journalId } = req.params;
+    
+    console.log('Analyzing journal with ID:', journalId);
+    console.log('User ID:', req.user.id);
+    
+    if (!journalId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ error: "Invalid journal ID format" });
+    }
+    
+    try {
+      const journal = await Journal.findOne({ 
+        _id: journalId,
+        user: req.user.id 
+      });
+      
+      if (!journal) {
+        console.log('Journal not found for ID:', journalId);
+        return res.status(404).json({ error: "Journal entry not found" });
+      }
+      
+      const User = require('../models/User'); 
+      const user = await User.findById(req.user.id);
+      const userName = user ? (user.name || user.email.split('@')[0]) : '';
+      
+      console.log('Journal found, content:', journal.content.substring(0, 50) + '...');
+      
+      try {
+        const response = await groq.chat.completions.create({
+          model: "llama3-70b-8192",
+          messages: [
+            {
+              role: "system", 
+              content: `You are a helpful therapeutic assistant. Address the user directly using "you" language (not "the writer" or third person). ${userName ? `The user's name is ${userName}, so you can occasionally use their name.` : ''}\n\nAnalyze the journal entry and provide your response in the following format:\n\n1. Start with a 'TLDR' section (2-3 sentences) that briefly states the user's mood and 1-2 key recommendations of what they should do and avoid.\n\n2. Then provide a more detailed analysis with the following sections:\n   - Your current mood and emotional state\n   - Three suggestions to improve your mood\n   - Two things you should avoid\n   - A short piece of advice\n\nKeep each section brief, compassionate, and use direct "you" language throughout.`
+            },
+            {
+              role: "user",
+              content: `Journal entry: ${journal.content}`
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 500
+        });
+        
+        const analysis = response.choices[0].message.content;
+        console.log('Analysis generated successfully');
+        
+        res.json({ analysis });
+      } catch (aiError) {
+        console.error('AI API error:', aiError);
+        res.status(500).json({ 
+          error: "AI service error", 
+          details: aiError.message,
+          stack: aiError.stack
+        });
+      }
+    } catch (dbError) {
+      console.error('Database error:', dbError);
+      res.status(500).json({ 
+        error: "Database error", 
+        details: dbError.message,
+        stack: dbError.stack
+      });
+    }
+  } catch (err) {
+    console.error("General error analyzing journal mood:", err);
+    res.status(500).json({ 
+      error: "Failed to analyze journal entry", 
+      details: err.message,
+      stack: err.stack
+    });
+  }
+};
 
-
+exports.testGroqAPI = async (req, res) => {
+  try {
+    console.log('Testing Groq API...');
+    
+    const response = await groq.chat.completions.create({
+      model: "llama3-70b-8192",
+      messages: [
+        {
+          role: "system", 
+          content: "You are a helpful assistant."
+        },
+        {
+          role: "user",
+          content: "Hello, can you give me a short response to test the API?"
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 100
+    });
+    
+    console.log('Groq API test successful');
+    res.json({ 
+      success: true, 
+      message: response.choices[0].message.content 
+    });
+  } catch (err) {
+    console.error('Groq API test error:', err);
+    res.status(500).json({ 
+      success: false, 
+      error: err.message,
+      stack: err.stack
+    });
+  }
+}; 
