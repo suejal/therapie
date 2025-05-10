@@ -1,7 +1,6 @@
 const jwt = require('jsonwebtoken');
 
 module.exports = (req, res, next) => {
-
   const token = req.header('Authorization');
   
   if (!token) {
@@ -24,4 +23,4 @@ module.exports = (req, res, next) => {
     console.error("Auth middleware error:", err);
     res.status(401).json({ error: "Authentication failed" });
   }
-};
+}; 

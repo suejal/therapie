@@ -3,36 +3,42 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 exports.register = async (req, res) => {
+  const { name, email, password } = req.body;
+
   try {
-    const { name, email, password } = req.body;
+    let user = await User.findOne({ email });
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: "Please provide name, email and password" });
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ error: "Invalid email format" });
+    if (user) {
+      return res.status(400).json({ error: 'User already exists' });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({ error: "Password must be at least 6 characters long" });
-    }
-    
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ error: "Email already registered" });
-    }
-    
+    user = new User({
+      name,
+      email,
+      password
+    });
+
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-    const newUser = new User({ name, email, password: hashedPassword });
-    await newUser.save();
-    
-    res.status(201).json({ message: 'Registration successful' });
+    user.password = await bcrypt.hash(password, salt);
+
+    await user.save();
+
+    const payload = {
+      id: user.id
+    };
+
+    jwt.sign(
+      payload,
+      process.env.JWT_SECRET,
+      { expiresIn: '1d' },
+      (err, token) => {
+        if (err) throw err;
+        res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+      }
+    );
   } catch (err) {
-    console.error("Registration error:", err);
-    res.status(500).json({ error: "Registration failed due to server error" });
+    console.error(err.message);
+    res.status(500).send('Server error');
   }
 };
 
@@ -64,3 +70,16 @@ exports.login = async (req, res) => {
     res.status(500).json({ error: "Login failed due to server error" });
   }
 };
+
+exports.getUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json(user);
+  } catch (err) {
+    console.error('Error fetching user:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+}; 

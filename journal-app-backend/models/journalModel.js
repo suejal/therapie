@@ -1,25 +1,30 @@
 const mongoose = require('mongoose');
 
 const JournalSchema = new mongoose.Schema({
-  user: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User', 
-    required: true 
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'user',
+    required: true
   },
-  title: { 
-    type: String 
+  title: {
+    type: String,
+    trim: true
   },
-  content: { 
-    type: String, 
-    required: true 
+  content: {
+    type: String,
+    required: true
   },
-  mood: { 
-    type: String 
+  mood: {
+    type: String,
+    enum: ['Happy', 'Calm', 'Sad', 'Anxious', 'Excited', 'Tired', 'Grateful', 'Frustrated', ''],
+    default: ''
   },
-  date: { 
-    type: Date, 
-    default: Date.now 
+  date: {
+    type: Date,
+    default: Date.now
   }
+}, {
+  timestamps: true
 });
 
-module.exports = mongoose.model('Journal', JournalSchema);
+module.exports = mongoose.model('journal', JournalSchema); 

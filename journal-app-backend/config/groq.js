@@ -4,4 +4,4 @@ const groq = new GroqClient({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-module.exports = groq;
+module.exports = groq; 
