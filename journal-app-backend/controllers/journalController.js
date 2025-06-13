@@ -1,9 +1,5 @@
 const Journal = require('../models/journalModel');
-const { Groq } = require('groq-sdk');
-
-const groq = new Groq({
-  apiKey: "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",
-});
+const groq = require('../config/groq');
 
 exports.createJournal = async (req, res) => {
   try {
